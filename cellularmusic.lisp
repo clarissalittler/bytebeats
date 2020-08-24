@@ -45,7 +45,7 @@
 
 (defun print-bytes (bs)
   (dotimes (i 8)
-    (write-char (code-char (int<- (subseq bs (* 8 i) (+ 8 (* 8 i))))))))
+    (write-byte (ldb (byte 8 i) (int<- bs)) *standard-output*)))
 
 
 (defun main (args)
