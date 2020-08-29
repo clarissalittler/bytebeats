@@ -47,14 +47,40 @@
   (dotimes (i 4)
     (write-char (code-char (int<- (subseq bs (* 8 i) (+ 8 (* 8 i))))))))
 
+
+;; here we are going to turn the automata into a function over time
+;; to do this we're going to break the 32 bits into a schema like
+;; using 2 bit selectors of operations followed by 6 bits of number
+;; 00 -> logior 
+;; 01 -> *      
+;; 10 -> logand
+;; 11 -> logxor
+;;
+;; we choose three of these (24 bits)
+;; then leave four bits for a shift (1 bit for left or right) and then
+;; 4 bits for a subtraction
+
+(defun to-op (bs)
+  (cond ((equal bs #*00) #'logior)
+	((equal bs #*01) #'*)
+	((equal bs #*10) #'logand)
+	((equal bs #*11) #'logxor)))
+
 (defun automata-to-function (bs)
-  (let ((c1 (int<- (subseq bs 0 8)))
-	(c2 (int<- (subseq bs 8 16)))
-	(c3 (int<- (subseq bs 16 24)))
-	(c4 (int<- (subseq bs 24 32))))
-    #'(lambda (tim) (ldb (byte 8 0) (+ (* tim (+ (logand tim c1) (logior tim c2) (ash tim c3))) c4)))))
-
-
+  (let ((o1 (subseq bs 0 2))
+	(o2 (subseq bs 8 10))
+	(o3 (subseq bs 16 18))
+	(s1 (bit bs 18))
+	(c1 (int<- (subseq bs 2 8)))
+	(c2 (int<- (subseq bs 10 16)))
+	(c3 (int<- (subseq bs 18 24)))
+	(c4 (int<- (subseq bs 24 28)))
+	(c5 (int<- (subseq bs 28 32))))
+    #'(lambda (tim) (ldb (byte 8 0)
+			 (- (funcall (to-op o1) tim
+				     (ash (+ c1
+					     (funcall (to-op o2) tim c2)
+					     (funcall (to-op o3) tim c3)) c4)) c5)))))
 (defun main (args)
   (let ((board (pad-bits (bits<- (parse-integer (nth 1 args))) 32))
 	(rules (byte-to-rules (parse-integer (nth 2 args)))))
@@ -62,7 +88,7 @@
       (loop
 	do (let ((new-board (run-sim board rules))
 	        (f (automata-to-function board)))
-	     (dotimes (tim 1000)
+	     (dotimes (tim 2000)
 	       (write-byte (funcall f tim) *standard-output*))
 	     ;;(format t "~a~%" board)
 	     (if (equal board new-board)
